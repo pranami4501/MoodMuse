@@ -14,7 +14,6 @@ import re
 punct_end = re.compile(r'[.!?…]+$')
 
 def clean_caption(text: str, vibe_tag: str | None = None) -> str:
-    # first line only
     text = text.splitlines()[0]
 
     # normalize spaces & stray '#'
@@ -27,7 +26,7 @@ def clean_caption(text: str, vibe_tag: str | None = None) -> str:
     # extract hashtags (letters+digits+underscores, 2..20 chars)
     raw_tags = re.findall(r'(?<!\w)#([A-Za-z][A-Za-z0-9_]{1,19})', text)
 
-    # filter: prefer tags with mostly letters (avoid gibberish)
+    # filter: prefers tags with mostly letters (to avoid gibberish)
     def good_tag(t: str) -> bool:
         letters = len(re.findall(r'[A-Za-z]', t))
         return letters >= max(2, int(0.6 * len(t)))
@@ -47,10 +46,10 @@ def clean_caption(text: str, vibe_tag: str | None = None) -> str:
         if len(tags) >= 3:
             break
 
-    # strip all hashtags from sentence part
+    # stripping all hashtags from sentence part
     sentence = re.sub(r'(?<!\w)#([A-Za-z][A-Za-z0-9_]{1,19})', '', text).strip()
 
-    # fix repeated-char junk words (e.g., "beartbeainsby" or "loooove")
+    # fixing repeated-char junk words (e.g., "beartbeainsby" or "loooove")
     sentence = re.sub(r'\b(\w{2,})\1{1,}\b', r'\1', sentence)
 
     # titlecase first letter
@@ -60,11 +59,11 @@ def clean_caption(text: str, vibe_tag: str | None = None) -> str:
     # cap length ~140 chars for the sentence (not counting tags)
     sentence = sentence[:140].rstrip()
 
-    # ensure sentence ends with punctuation
+    # ensuring sentence ends with punctuation
     if sentence and not punct_end.search(sentence):
         sentence += '.'
 
-    # stitch final with up to 3 tags, prefixed by single spaces
+    # stitching final with up to 3 tags, prefixed by single spaces
     if tags:
         sentence += ' ' + ' '.join('#' + t for t in tags)
     return sentence.strip()
@@ -103,7 +102,7 @@ class CompatSelfAttention(nn.Module):
         qkv = self.qkv(x)                         # (B, T, 3C)
         q, k, v = qkv.chunk(3, dim=-1)            # each (B, T, C)
 
-        # scaled dot-prod attention (single-head to match your checkpoint)
+        # scaled dot-prod attention (single-head to match checkpoint)
         att = (q @ k.transpose(-2, -1)) / math.sqrt(C)      # (B, T, T)
         att = att.masked_fill(~self.mask[:T, :T], float("-inf"))
         att = F.softmax(att, dim=-1)
@@ -167,13 +166,11 @@ class CompatGPT(nn.Module):
         return logits, loss
 
 # ---------- Loading checkpoint & tokenizer ----------
-# -- open and edit /content/MoodMuse/src/inference.py --
-# Replace your current load_checkpoint() with this version:
 
 def load_checkpoint(ckpt_path, device):
     ckpt = torch.load(ckpt_path, map_location=device)
 
-    # stoi/itos & block_size saved by your training loop
+    # stoi/itos & block_size saved by training loop
     stoi = ckpt.get("stoi"); itos = ckpt.get("itos")
     block_size = ckpt.get("block_size", 128)
 
@@ -182,7 +179,7 @@ def load_checkpoint(ckpt_path, device):
     vocab_size, n_embd = sd["tok_emb.weight"].shape
     n_layer = max(int(k.split(".")[1]) for k in sd.keys() if k.startswith("blocks.")) + 1
 
-    # prune attn.mask buffers saved in ckpt (shape mismatch vs our runtime buffer)
+    # prune attn.mask buffers saved in ckpt (shape mismatch vs runtime buffer)
     pruned = 0
     for k in list(sd.keys()):
         if k.endswith(".attn.mask"):
@@ -191,7 +188,7 @@ def load_checkpoint(ckpt_path, device):
 
     model = CompatGPT(vocab_size=vocab_size, n_embd=n_embd, n_layer=n_layer, block_size=block_size)
 
-    # load with strict=False because we intentionally dropped buffers
+    # loading with strict=False because we intentionally dropped buffers
     missing, unexpected = model.load_state_dict(sd, strict=False)
 
     # optional: small sanity print
